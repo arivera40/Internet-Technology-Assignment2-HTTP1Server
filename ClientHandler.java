@@ -21,8 +21,8 @@ public class ClientHandler extends Thread {
 	@Override
 	public void run() {
 		try {
-			// HTTP server responses are written into the OutputStream - we use PrintWriter to output response header
-			// and we use BufferedOutputStream to output response body/data when necessary
+			// HTTP server responses are written into the OutputStream - we use PrintWriter to output response header (and POST response body)
+			// and we use BufferedOutputStream to output response body/data when necessary (for GET and HEAD requests)
 			PrintWriter responseHead = new PrintWriter(new OutputStreamWriter (output_stream));
 
 			String request = getClientRequest(responseHead);
@@ -39,9 +39,7 @@ public class ClientHandler extends Thread {
 			BufferedOutputStream outStreamWriter = new BufferedOutputStream(output_stream);
 
 			// This will continue running until socket connection is closed
-			//Header may need to change to account for option If-Modified request (this would be in the following line)
-
-			HttpParser parser = new HttpParser();
+			HttpParser parser = new HttpParser(socket.getPort(), socket.getInetAddress().getHostAddress());
 			int status = parser.parseRequest(request);
 			if (status == -1) {
 				// respond with 404 Bad Request
@@ -63,6 +61,10 @@ public class ClientHandler extends Thread {
 				// respond with 411 Length Required
 				responseHead.println("HTTP/1.0 411 Length Required" + "\r\n");
 				responseHead.flush();
+			}else if(status == -6){
+				// respond with 405 Method Not Allowed
+				responseHead.println("HTTP/1.0 405 Method Not Allowed" + "\r\n");
+				responseHead.flush();
 			}else {
 				parser.getHttpResponse(responseHead, outStreamWriter);
 			}
@@ -82,13 +84,15 @@ public class ClientHandler extends Thread {
 
 	}
 	
+	//Reads in clientRequest from the input stream
 	private String getClientRequest(PrintWriter response) throws IOException {
 		StringBuilder request = new StringBuilder();
 		boolean first = true;
 		do {
 			if(first) {
 				try {
-					sleep(1000);
+					//Waits 5 seconds and if no incoming request within that time responds with 408 Request Timeout
+					sleep(5000);
 					if(input_stream.available() <= 0) {
 						response.print("HTTP/1.0 408 Request Timeout" + "\r\n");
 						response.flush();
